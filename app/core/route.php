@@ -2,18 +2,26 @@
 
     class route{
         protected static $route=[];
-        protected static $routeGroup=[];
+        protected static $param=[];
         public static function addRoute($method,$url,$action){
             self::$route[]=func_get_args();
         }
         public static function get($url,$action){
             self::addRoute('get',...func_get_args());
+            return new static;
         }
         public static function post($url,$action){
             self::addRoute('post',...func_get_args());
+            return new static;
         }
         public static function any($url,$action){
             self::addRoute('get|post',...func_get_args());
+            return new static;
+        }
+        public function name($name){
+            $currentRoute=array_pop(self::$route);
+            $currentRoute+=['name'=>$name];
+            array_push(self::$route,$currentRoute);
         }
         public static function group($groupName,$closure){
             if(is_array($groupName)){
@@ -26,14 +34,13 @@
                         $newRouteGroupAddedPrefix=self::addPrefixIntoRoute($groupName['prefix'],$routeGroup);
                         foreach ($newRouteGroupAddedPrefix as $key => $route) {
                             list($method,$url,$action)=$route;
-                           self::addRoute($method,$url,$action);
+                            self::addRoute($method,$url,$action);
                         }
                     }
                 }
                 return new static;
             }
         }
-
         public static function GetRouteGroup($groupName){
             $pointRouteGroup=self::findStartGroupName($groupName);
             if(!empty($pointRouteGroup)){
@@ -77,18 +84,98 @@
             return [];
         }
         public static function mapingRoute(Request $request){
+            array_push(self::$route,['get|post','*',function(){
+                die('page not found');
+            }]);
             $routeRegistered=self::$route;
+            $check=false;
             foreach ($routeRegistered as $Routekey => $route) {
-                list($method,$url,$action)=$route;
-                if(strpos($request->method(),$method)===false){
+                list($method,$url,$action)=$route; 
+                if($url=='*'){
+                    $check=true;
+                    break;
+                }
+                if(strpos(strtolower($request->method()),$method)===false){ 
                     continue;
                 }
-                if(strcmp($request->url(),$url)==0){
-                    if(preg_match('/{/',$request->url())){
-                        
+                $arrayUrlRoute=explode('/',trim($url,'/'));
+                $arrayUrlRequest=explode('/',trim($request->url(),'/'));
+                if(count($arrayUrlRoute)!==count($arrayUrlRequest)) continue;
+               
+                if(preg_match('/({|})+/',$url)){
+                    //Route have param for closure
+                    foreach ($arrayUrlRoute as $urlKey => $urlValue) {
+                        if(preg_match('/({|})+/',$urlValue)){
+                            self::$param[]=$arrayUrlRequest[$urlKey];
+                            $arrayUrlRoute[$urlKey]=$arrayUrlRequest[$urlKey];
+                        }
+                    }
+                    $newUrlRoute=implode('/',$arrayUrlRoute);
+                    if(strcmp($request->url(),$newUrlRoute)===0){
+                        $check=true;
+                        break;
+                    }
+                }else{
+                
+                    if(strcmp($request->url(),trim($url,'/'))===0){
+                        $check=true;
+                        break;
+                    }
+                }   
+            }
+            if($check){
+                if(is_callable($action)){
+                    $info=new ReflectionFunction($action);
+                    if($info->getNumberOfParameters()!== count(self::$param)){
+                        foreach ($info->getParameters() as $keyParameters => $valueParameters) {
+                            if($valueParameters->name=='request'){
+                                $request=new Request;
+                                if(isset(self::$param[$keyParameters])){
+                                    $temp=self::$param[$keyParameters];
+                                    self::$param[$keyParameters]=$request;
+                                    array_push(self::$param,$temp);
+                                }else{
+                                    self::$param[$keyParameters]=$request;
+                                }
+                            }
+                        }
+                    };
+                    call_user_func_array($action,self::$param);
+                }else if(is_string($action)){
+                    
+                    self::callbackController($action);
+                }
+            }else{
+                self::$param=[];
+            }
+        }
+        public static function callbackController($strAction){
+            $arrayAction=explode('@',$strAction);
+            if(count($arrayAction)!==2) return false;
+            $controller=$arrayAction[0];
+            $action=$arrayAction[1];
+            if(file_exists('../app/controller/'.$controller.'.php')){
+                require_once '../app/controller/'.$controller.'.php';
+                $class=new ReflectionClass($controller);
+                $info=$class->getMethod($action);
+                foreach ($info->getParameters() as $keyParameters => $valueParameters) {
+                    if($valueParameters->name=='request'){
+                        $request=new Request;
+                        if(isset(self::$param[$keyParameters])){
+                            $temp=self::$param[$keyParameters];
+                            self::$param[$keyParameters]=$request;
+                            array_push(self::$param,$temp);
+                        }else{
+                            self::$param[$keyParameters]=$request;
+                        }
                     }
                 }
+                
+                call_user_func_array([$controller,$action],self::$param);
+            }else{
+                die("controller $controller không tồn tại");
             }
+           
         }
     }
 ?>
