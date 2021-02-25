@@ -3,11 +3,24 @@
     require '../app/core/request.php';
     require_once '../app/core/database.php';
     require_once '../app/core/route.php';
-    $DB=new DB;
-    $DB->table('user')->select(['username','password'])->where('user_id','=','1')->where('username','LIKE',"%text%")->mapSql();
+    $request = new Request;
+    echo $request->address_dir()."<br>";
+    echo '<pre>';
+    print_r($_SERVER);
+   
     new app;
-    Route::get('/get1/{id}',function($id,Request $request){
-        echo $request->get('a');
+    $db=new DB;
+    $name="Nguyen Trong Phuc";
+    $db->table('user')->select(['Name','Email'])->skip(0)->take(10)->where([
+        ['name','=','Nguyen Trong Phuc']
+    ])->orWhere([
+        ['pass','LIKE','adminphuc']
+    ])->mapSql();
+    Route::get('/',function(){
+        echo 123;
+    });
+    Route::get('get1/{id}',function($id, Request $req){
+        echo $req->get('a');
         echo $id;
         echo '<br><form method="post" action="http://localhost/php/pzframe/public/postEdit"><input type="submit" value="submit"></form>';
     })->name('name get 1');

@@ -91,6 +91,7 @@
             $check=false;
             foreach ($routeRegistered as $Routekey => $route) {
                 list($method,$url,$action)=$route; 
+               
                 if($url=='*'){
                     $check=true;
                     break;
@@ -98,11 +99,12 @@
                 if(strpos(strtolower($request->method()),$method)===false){ 
                     continue;
                 }
-                $arrayUrlRoute=explode('/',trim($url,'/'));
-                $arrayUrlRequest=explode('/',trim($request->url(),'/'));
-                if(count($arrayUrlRoute)!==count($arrayUrlRequest)) continue;
                
-                if(preg_match('/({|})+/',$url)){
+                $arrayUrlRoute=explode('/',trim($url,'/'));
+                $requestUrl=trim($request->url(),'/');
+                $arrayUrlRequest=explode('/',$requestUrl);
+                if(count($arrayUrlRoute)!==count($arrayUrlRequest)) continue;
+                if(preg_match('/({|})+/',$url)){    
                     //Route have param for closure
                     foreach ($arrayUrlRoute as $urlKey => $urlValue) {
                         if(preg_match('/({|})+/',$urlValue)){
@@ -111,13 +113,14 @@
                         }
                     }
                     $newUrlRoute=implode('/',$arrayUrlRoute);
-                    if(strcmp($request->url(),$newUrlRoute)===0){
+                   
+                    if(strcmp($requestUrl,$newUrlRoute)===0){
                         $check=true;
                         break;
                     }
                 }else{
                 
-                    if(strcmp($request->url(),trim($url,'/'))===0){
+                    if(strcmp($requestUrl,trim($url,'/'))===0){
                         $check=true;
                         break;
                     }
@@ -128,7 +131,8 @@
                     $info=new ReflectionFunction($action);
                     if($info->getNumberOfParameters()!== count(self::$param)){
                         foreach ($info->getParameters() as $keyParameters => $valueParameters) {
-                            if($valueParameters->name=='request'){
+                            $objectRequestCheck=$valueParameters->getClass();
+                            if(isset($objectRequestCheck->name) && $objectRequestCheck->name=='Request'){
                                 $request=new Request;
                                 if(isset(self::$param[$keyParameters])){
                                     $temp=self::$param[$keyParameters];
@@ -139,10 +143,10 @@
                                 }
                             }
                         }
+                        
                     };
                     call_user_func_array($action,self::$param);
                 }else if(is_string($action)){
-                    
                     self::callbackController($action);
                 }
             }else{
@@ -159,7 +163,8 @@
                 $class=new ReflectionClass($controller);
                 $info=$class->getMethod($action);
                 foreach ($info->getParameters() as $keyParameters => $valueParameters) {
-                    if($valueParameters->name=='request'){
+                    $objectRequestCheck=$valueParameters->getClass();
+                    if(isset($objectRequestCheck) && $objectRequestCheck->name=='Request'){
                         $request=new Request;
                         if(isset(self::$param[$keyParameters])){
                             $temp=self::$param[$keyParameters];
@@ -170,7 +175,6 @@
                         }
                     }
                 }
-                
                 call_user_func_array([$controller,$action],self::$param);
             }else{
                 die("controller $controller không tồn tại");
