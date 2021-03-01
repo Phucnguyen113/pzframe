@@ -113,7 +113,6 @@
                         }
                     }
                     $newUrlRoute=implode('/',$arrayUrlRoute);
-                   
                     if(strcmp($requestUrl,$newUrlRoute)===0){
                         $check=true;
                         break;
@@ -127,6 +126,11 @@
                 }   
             }
             if($check){
+                //middleware execute
+                $middleware='';
+                if(isset($route['middleware'])){
+                    self::middlewareExecute($route['middleware'],$middleware);
+                }
                 if(is_callable($action)){
                     $info=new ReflectionFunction($action);
                     if($info->getNumberOfParameters()!== count(self::$param)){
@@ -149,6 +153,14 @@
                 }else if(is_string($action)){
                     self::callbackController($action);
                 }
+
+                if(is_object($middleware)){
+                    $parentClass=new ReflectionClass($middleware);
+                    $parentClassName=$parentClass->getParentClass();
+                    if($parentClassName->name=='middleware'){
+                        $middleware->after();
+                    }
+                }
             }else{
                 self::$param=[];
             }
@@ -156,8 +168,7 @@
         public static function callbackController($strAction){
             $arrayAction=explode('@',$strAction);
             if(count($arrayAction)!==2) return false;
-            $controller=$arrayAction[0];
-            $action=$arrayAction[1];
+            list($controller,$action)=$arrayAction;
             if(file_exists('../app/controller/'.$controller.'.php')){
                 require_once '../app/controller/'.$controller.'.php';
                 $class=new ReflectionClass($controller);
@@ -180,6 +191,22 @@
                 die("controller $controller không tồn tại");
             }
            
+        }
+        public function middleware($name){
+            $currentRoute=array_pop(self::$route);
+            $currentRoute+=['middleware'=>$name];
+            array_push(self::$route,$currentRoute);
+        }
+        public static function middlewareExecute($middlewareName,&$middleware){
+           
+            if(file_exists('../app/middleware/'.$middlewareName.'Middleware.php')){
+                require_once '../app/middleware/'.$middlewareName.'Middleware.php';
+                $middlewareName.="Middleware";
+                $middleware= new $middlewareName;
+                $middleware->before();
+            }else{
+                die('../app/middleware/'.$middlewareName.'.php');
+            }
         }
     }
 ?>
